@@ -133,34 +133,31 @@ if st.checkbox("Xem lịch sử"):
         st.dataframe(df)
 
 # === 9. Test case ===
-st.sidebar.header("Kiểm thử mô hình")
 
-def normalize_label(label: str):
-    return label.strip().upper()
+test_container = st.sidebar.container()   # Tạo khung cố định trong sidebar
 
 if st.sidebar.button("Chạy kiểm thử"):
     correct = 0
     results = []
-
     for case in test_cases:
         pred, conf = classify_sentiment(case["text"])
-        pred_n = normalize_label(pred)
-        expect_n = normalize_label(case["expected"])
-        ok = (pred_n == expect_n)
-
+        pred_norm = normalize_label(pred)
+        expected_norm = normalize_label(case["expected"])
+        ok = (pred_norm == expected_norm)
         if ok:
             correct += 1
 
         results.append({
             "Câu": case["text"],
-            "Dự đoán": pred_n,
+            "Dự đoán": pred_norm,
             "Độ tin cậy": f"{conf*100:.1f}%",
-            "Mong đợi": expect_n,
+            "Mong đợi": expected_norm,
             "Kết quả": "✔️ Đúng" if ok else "❌ Sai"
         })
 
     acc = correct / len(test_cases) * 100
-    st.sidebar.success(f"🎉 Kết quả: {correct}/{len(test_cases)} = {acc:.1f}%")
 
-    st.subheader("📊 Kết quả chi tiết")
-    st.dataframe(pd.DataFrame(results))
+    # ==== TẤT CẢ KẾT QUẢ ĐẦU RA NẰM TRONG SIDEBAR ====
+    with test_container:
+        st.success(f"🎉 Kết quả: {correct}/{len(test_cases)} = {acc:.1f}%")
+        st.dataframe(pd.DataFrame(results), use_container_width=True)
