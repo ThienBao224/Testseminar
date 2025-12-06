@@ -65,12 +65,16 @@ def normalize_abbrev(text):
 # =======================================================
 def preprocess(text):
     text = text.lower().strip()
+    # Khôi phục dấu và viết tắt
     text = restore_accents(text)
+    # Tokenize với underthesea
     words = word_tokenize(text, format="text").split()
-    if len(words) < 2 or len(words) > 20:
+    if len(words) < 2 or len(words) > 50:  # mở rộng số từ cho câu dài
         return None
+    # Áp dụng dictionary viết tắt
     words = [abbrev_map.get(w, w) for w in words]
     return " ".join(words)
+
 
 # =======================================================
 # 4. LOAD PHOBERT (THỬ NHIỀU MODEL)
@@ -199,47 +203,45 @@ def get_emoji(label):
 # 10. PHÂN LOẠI SENTIMENT
 # =======================================================
 def classify_sentiment(text, threshold=0.5):
+    # 1. Tiền xử lý: lowercase + bỏ khoảng trắng + restore accents
     clean = preprocess(text)
     if clean is None:
         return None, 0.0
 
-    # 1. Rule phủ định (ưu tiên cao nhất)
+    # 2. Rule phủ định (ưu tiên cao nhất)
     neg_label = negation_rule(clean)
     if neg_label:
         return normalize_label(neg_label), 0.92
 
-    # 2. PhoBERT fine-tuned
+    # 3. Dictionary toàn câu (ưu tiên mạnh)
+    dic_label = dict_match(clean)
+    if dic_label:
+        return normalize_label(dic_label), 0.85
+
+    # 4. Model PhoBERT (chỉ dùng khi không có dictionary)
     try:
         result = classifier(clean)[0]
         model_label = normalize_label(result['label'])
         model_conf = result['score']
 
-        # 2a. Check dictionary toàn câu
-        dic_label = dict_match(clean)
-        if dic_label:
-            # Dictionary luôn được ưu tiên nếu tìm thấy
-            return normalize_label(dic_label), min(model_conf + 0.15, 0.85)
-
-        # 2b. Nếu model tự tin, dùng model
+        # Nếu model tự tin, dùng model
         if model_conf >= threshold:
             return model_label, model_conf
 
-        # 2c. Kiểm tra từng token
+        # Kiểm tra từng token
         tokens = clean.split()
         for token in tokens:
             token_label = dict_match(token)
             if token_label:
                 return normalize_label(token_label), max(model_conf, 0.68)
 
-        # 2d. Nếu không tìm thấy gì, fallback NEUTRAL
+        # Nếu không tìm thấy gì, fallback NEUTRAL
         return "NEUTRAL", max(model_conf, 0.5)
 
-    except Exception as e:
-        # Nếu model lỗi, fallback dictionary
-        dic_label = dict_match(clean)
-        if dic_label:
-            return normalize_label(dic_label), 0.75
+    except Exception:
+        # Nếu model lỗi, fallback NEUTRAL
         return "NEUTRAL", 0.5
+
 
 # =======================================================
 # 11. SQLITE
