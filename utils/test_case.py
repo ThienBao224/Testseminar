@@ -13,11 +13,10 @@ test_cases = [
     {"text": "Ngày mai đi học", "expected": "NEUTRAL"},
     {"text": "Cảm ơn bạn rất nhiều", "expected": "POSITIVE"},
     {"text": "Mệt mỏi quá hôm nay", "expected": "NEGATIVE"},
-
-    # Không dấu
     {"text": "Hom nay toi rat vui", "expected": "POSITIVE"},
     {"text": "Mon an nay do qua", "expected": "NEGATIVE"},
     {"text": "Thoi tiet binh thuong", "expected": "NEUTRAL"},
+    {"text": "Rat vui hom nay", "expected": "POSITIVE"},
     {"text": "Cong viec on dinh", "expected": "NEUTRAL"},
     {"text": "Phim nay hay lam", "expected": "POSITIVE"},
     {"text": "Toi buon vi that bai", "expected": "NEGATIVE"},
