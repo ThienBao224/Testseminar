@@ -134,18 +134,17 @@ def dict_match(text):
     if not text:
         return None
 
-    t = text.lower().strip()             # dạng có dấu
-    t_no = remove_accents(t)             # dạng không dấu
+    t = text.lower().replace("_", " ").strip()
+    t_no = remove_accents(t)
 
+    # Sắp xếp theo độ dài key giảm dần để match cụm từ trước
     sorted_keys = sorted(sentiment_dict.keys(), key=lambda x: -len(x.split()))
     for key in sorted_keys:
-        key_norm = key.lower().strip()   # dạng có dấu
-        key_no = remove_accents(key_norm)  # dạng không dấu
-        # Match cả 3: có dấu, không dấu input
-        if key_norm in t or key_no in t or key_no in t_no:
+        key_norm = key.lower().replace("_", " ")
+        key_no = remove_accents(key_norm)
+        if key_norm in t or key_no in t_no:
             return sentiment_dict[key]
     return None
-
 
 # =======================================================
 # 7. KHÔI PHỤC DẤU
