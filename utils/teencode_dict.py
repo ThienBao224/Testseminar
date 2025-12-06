@@ -22,7 +22,7 @@ def remove_accents(text):
 # =======================================================
 # HÀM CHUẨN HÓA VIẾT TẮT
 # =======================================================
-def normalize_abbrev(text):
+def normalize_teencode(text):
     tokens = text.split()
     out = []
     for w in tokens:
