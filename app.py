@@ -65,22 +65,21 @@ def normalize_abbrev(text):
 # =======================================================
 def preprocess(text):
     text = text.lower().strip()
-    if len(text) < 5 or len(text) > 50:  # Giới hạn ký tự
-        return None
-
-    # Tokenize
+    
+    # 1. Restore dấu trước khi tokenize
+    text = restore_accents(text)
+    
+    # 2. Tokenize bằng Underthesea
     words = word_tokenize(text, format="text").split()
-
-    if len(words) < 2 or len(words) > 20:  # Giới hạn từ
+    
+    # 3. Giới hạn từ
+    if len(words) < 2 or len(words) > 20:
         return None
-
-    # Normalize viết tắt
+    
+    # 4. Normalize viết tắt thêm lần nữa
     words = [abbrev_map.get(w, w) for w in words]
-
-    # Restore dấu (accent dictionary)
-    words = [accent_dict.get(w, w) for w in words]
-
-    # Trả về câu chuẩn
+    
+    # 5. Trả về câu chuẩn
     return " ".join(words)
 
 # =======================================================
@@ -157,14 +156,20 @@ def dict_match(text):
 # 7. KHÔI PHỤC DẤU
 # =======================================================
 def restore_accents(text):
+    # 1. Normalize viết tắt
     text = normalize_abbrev(text.lower())
-    text_no = remove_accents(text)
-    result = text
+    
+    # 2. Match accent_dict theo cụm từ giảm dần
     sorted_keys = sorted(accent_dict.keys(), key=lambda x: -len(x.split()))
+    text_no = remove_accents(text)
+    
     for key in sorted_keys:
-        if key in text_no:
-            result = result.replace(key, accent_dict[key])
-    return result
+        key_no = remove_accents(key)
+        # Dùng regex để match từ/cụm, không quan tâm dấu trong text
+        pattern = r'\b' + re.escape(key_no) + r'\b'
+        text = re.sub(pattern, accent_dict[key], text, flags=re.IGNORECASE)
+    
+    return text
 
 # =======================================================
 # 8. RULE PHỦ ĐỊNH
