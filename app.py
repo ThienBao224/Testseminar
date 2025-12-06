@@ -26,11 +26,14 @@ classifier = load_classifier()
 # 2. Dictionary 25 từ
 # ========================================
 sentiment_dict = {
-    "vui": "POSITIVE", "tuyệt": "POSITIVE", "hay": "POSITIVE", "đỉnh": "POSITIVE", "thích": "POSITIVE",
-    "yêu": "POSITIVE", "ok": "NEUTRAL", "ổn": "NEUTRAL", "bình thường": "NEUTRAL", "cũng được": "NEUTRAL", "ổn định": "NEUTRAL",
-    "buồn": "NEGATIVE", "chán": "NEGATIVE", "ghét": "NEGATIVE", "tồi": "NEGATIVE", "dở": "NEGATIVE",
-    "thất vọng": "NEGATIVE", "khó chịu": "NEGATIVE", "tệ": "NEGATIVE", "khủng khiếp": "NEGATIVE",
-    "hạnh phúc": "POSITIVE", "vui vẻ": "POSITIVE", "rất vui": "POSITIVE", "không thích": "NEGATIVE",
+    "vui": "POSITIVE", "cảm ơn": "POSITIVE", "tuyệt": "POSITIVE",
+    "hay": "POSITIVE", "đỉnh": "POSITIVE", "thích": "POSITIVE",
+    "yêu": "POSITIVE", "hạnh phúc": "POSITIVE", "vui vẻ": "POSITIVE", "thuận": "POSITIVE",
+    "ok": "NEUTRAL", "ổn": "NEUTRAL", "ổn định": "NEUTRAL",
+    "bình thường": "NEUTRAL", "cũng được": "NEUTRAL",
+    "buồn": "NEGATIVE", "chán": "NEGATIVE", "ghét": "NEGATIVE",
+    "tồi": "NEGATIVE", "dở": "NEGATIVE", "thất vọng": "NEGATIVE",
+    "khó chịu": "NEGATIVE", "tệ": "NEGATIVE", "khủng khiếp": "NEGATIVE",
     "bực mình": "NEGATIVE", "mệt mỏi": "NEGATIVE"
 }
 
@@ -41,14 +44,14 @@ def preprocess(text):
     if not isinstance(text, str):
         return None
     text = text.strip()
-    if len(text) < 5 or len(text) > 200:
+    if len(text) < 5 or len(text) > 50:
         return None
     text_norm = normalize_teencode(text.lower())
     try:
         tokens = word_tokenize(text_norm)
     except:
         tokens = text_norm.split()
-    if len(tokens) < 2 or len(tokens) > 120:
+    if len(tokens) < 2 or len(tokens) > 20:
         return None
     return " ".join(tokens)
 
@@ -102,7 +105,7 @@ def normalize_label(label):
 # ========================================
 # 7. Classify sentiment
 # ========================================
-def classify_sentiment(text, threshold=0.7):
+def classify_sentiment(text, threshold=0.5):
     clean = preprocess(text)
     if clean is None:
         return None, 0.0
