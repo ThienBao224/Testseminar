@@ -195,51 +195,40 @@ def get_emoji(label):
 # =======================================================
 # 10. PHÂN LOẠI SENTIMENT
 # =======================================================
-def classify_sentiment(text, threshold=0.55):  # Giảm threshold để PhoBERT dễ tin tưởng
-    # --- Tiền xử lý ---
-    clean = preprocess(text)
-    if clean is None:
+def classify_sentiment(text, threshold=0.5):
+    clean = preprocess_underthesea(text)
+    if not clean:
         return None, 0.0
 
-    # --- 1. Rule phủ định (ưu tiên cao nhất) ---
+    # 1. Rule phủ định
     neg_label = negation_rule(clean)
     if neg_label:
-        # Confidence cố định 92% vì rule phủ định đáng tin
         return normalize_label(neg_label), 0.92
 
-    # --- 2. Dictionary mạnh ---
-    dic_label = dict_match(clean)
-    if dic_label:
-        # Dictionary được tin tưởng cao, confidence cố định 85%
-        return normalize_label(dic_label), 0.85
-
-    # --- 3. PhoBERT fine-tuned ---
+    # 2. Model PhoBERT
     try:
-        result = classifier(clean)[0]  # Lấy dự đoán từ model
+        result = classifier(clean)[0]
         label = normalize_label(result['label'])
         confidence = result['score']
-
         if confidence >= threshold:
-            # Nếu model tự tin, trả luôn kết quả
             return label, confidence
+    except:
+        label, confidence = None, 0.0
 
-        # --- 4. Token-level check ---
-        tokens = clean.split()
-        for token in tokens:
-            token_label = dict_match(token)
-            if token_label:
-                # Nếu tìm thấy từ tích cực/tiêu cực, gán confidence thấp hơn
-                return normalize_label(token_label), 0.68
+    # 3. Dictionary mạnh (chỉ dùng khi model không tự tin)
+    dic_label = dict_match(clean)
+    if dic_label:
+        return normalize_label(dic_label), max(confidence + 0.15, 0.75)
 
-        # --- 5. Nếu không tìm thấy gì, trả model nhưng confidence thấp ---
-        return label, confidence
+    # 4. Token-level
+    tokens = clean.split()
+    for token in tokens:
+        token_label = dict_match(token)
+        if token_label:
+            return normalize_label(token_label), 0.68
 
-    except Exception as e:
-        # Nếu model lỗi, fallback về NEUTRAL hoặc dictionary
-        dic_label = dict_match(clean)
-        if dic_label:
-            return normalize_label(dic_label), 0.75
-        return "NEUTRAL", 0.5
+    # 5. Không tìm thấy gì → fallback model hoặc NEUTRAL
+    return label or "NEUTRAL", confidence or 0.5
 
 # =======================================================
 # 11. SQLITE
