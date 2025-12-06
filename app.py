@@ -102,7 +102,7 @@ def normalize_label(label):
 # ========================================
 # 7. Classify sentiment
 # ========================================
-def classify_sentiment(text, threshold=0.5):
+def classify_sentiment(text, threshold=0.7):
     clean = preprocess(text)
     if clean is None:
         return None, 0.0
@@ -177,8 +177,8 @@ if st.sidebar.button("Chạy 10 test case"):
     correct = 0
     results = []
     for case in test_cases:
-        text_case = case.get("text") or case.get("expected_text")
-        expected = case.get("expected","NEUTRAL")
+        text_case = case.get("text")
+        expected = case.get("expected", "NEUTRAL")
         pred, conf = classify_sentiment(text_case)
         pred = pred if pred else "NEUTRAL"
         ok = pred.upper() == expected.upper()
@@ -188,8 +188,9 @@ if st.sidebar.button("Chạy 10 test case"):
             "Câu": text_case,
             "Dự đoán": pred.upper(),
             "Mong đợi": expected.upper(),
+            "Độ tin cậy": f"{conf:.2%}",
             "Kết quả": "✔️ Đúng" if ok else "❌ Sai"
         })
-    acc = correct/len(test_cases)*100
-    st.sidebar.success(f"Độ chính xác: {acc:.1f}% ({correct}/{len(test_cases)})")
+    acc = correct / len(test_cases) * 100
+    st.sidebar.success(f"🎯 Độ chính xác: {acc:.1f}% ({correct}/{len(test_cases)})")
     st.sidebar.dataframe(pd.DataFrame(results))
