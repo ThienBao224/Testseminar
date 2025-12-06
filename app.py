@@ -213,7 +213,7 @@ def get_emoji(label):
     if clean is None:
         return None, 0.0
 
-    # 1. Rule phủ định
+    # 1. Rule phủ định (ưu tiên cao nhất)
     neg_label = negation_rule(clean)
     if neg_label:
         return normalize_label(neg_label), 0.92
@@ -227,24 +227,25 @@ def get_emoji(label):
         # 2a. Check dictionary toàn câu
         dic_label = dict_match(clean)
         if dic_label:
+            # Dictionary luôn được ưu tiên nếu tìm thấy
             return normalize_label(dic_label), min(model_conf + 0.15, 0.85)
 
-        # 2b. Nếu model tự tin
+        # 2b. Nếu model tự tin, dùng model
         if model_conf >= threshold:
             return model_label, model_conf
 
-        # 2c. Check từng token
+        # 2c. Kiểm tra từng token
         tokens = clean.split()
         for token in tokens:
             token_label = dict_match(token)
             if token_label:
                 return normalize_label(token_label), max(model_conf, 0.68)
 
-        # 2d. Fallback NEUTRAL
+        # 2d. Nếu không tìm thấy gì, fallback NEUTRAL
         return "NEUTRAL", max(model_conf, 0.5)
 
     except Exception as e:
-        # Nếu model lỗi
+        # Nếu model lỗi, fallback dictionary
         dic_label = dict_match(clean)
         if dic_label:
             return normalize_label(dic_label), 0.75
