@@ -46,15 +46,30 @@ def preprocess(text):
     text = text.strip()
     if len(text) < 5 or len(text) > 50:
         return None
+
+    # 1. Chuẩn hóa teencode
     text_norm = normalize_teencode(text.lower())
+
+    # 2. Tokenize bằng underthesea (giữ dấu)
     try:
         tokens = word_tokenize(text_norm)
     except:
         tokens = text_norm.split()
+
+    # 3. Nếu token ít hơn 2 hoặc quá nhiều → loại
     if len(tokens) < 2 or len(tokens) > 20:
         return None
-    return " ".join(tokens)
 
+    # 4. Nếu toàn không dấu → giữ bản gốc có dấu nếu có trong dictionary
+    has_diacritics = any(ord(c) > 127 for c in text_norm)
+    if not has_diacritics:
+        # dò từ điển sentiment_dict để phục hồi dấu
+        for key in sentiment_dict.keys():
+            key_no = remove_accents(key)
+            if key_no in text_norm:
+                text_norm = text_norm.replace(key_no, key)
+    
+    return " ".join(tokens)
 # ========================================
 # 4. Rule phủ định
 # ========================================
