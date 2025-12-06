@@ -190,3 +190,5 @@ if st.sidebar.button("Chạy 10 test case"):
     acc = correct/len(test_cases)*100
     st.sidebar.success(f"Độ chính xác: {acc:.1f}% ({correct}/{len(test_cases)})")
     st.sidebar.dataframe(pd.DataFrame(results))
+
+
