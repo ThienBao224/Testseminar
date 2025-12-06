@@ -209,7 +209,6 @@ def get_emoji(label):
 # =======================================================
 # 10. PHÂN LOẠI SENTIMENT
 # =======================================================
-def classify_sentiment(text, threshold=0.5):
     clean = preprocess(text)
     if clean is None:
         return None, 0.0
@@ -219,35 +218,38 @@ def classify_sentiment(text, threshold=0.5):
     if neg_label:
         return normalize_label(neg_label), 0.92
 
-    # 2. PhoBERT dự đoán
+    # 2. PhoBERT fine-tuned
     try:
         result = classifier(clean)[0]
         model_label = normalize_label(result['label'])
         model_conf = result['score']
-    except:
-        model_label = None
-        model_conf = 0.0
 
-    # 3. Dictionary check toàn câu
-    dic_label = dict_match(clean)
-    if dic_label:
-        # Nếu dictionary có, luôn ưu tiên dictionary
-        return normalize_label(dic_label), min(confidence + 0.15, 0.85)
+        # 2a. Check dictionary toàn câu
+        dic_label = dict_match(clean)
+        if dic_label:
+            # Dictionary luôn được ưu tiên nếu tìm thấy
+            return normalize_label(dic_label), min(model_conf + 0.15, 0.85)
 
-    # 4. Token-level check
-    tokens = clean.split()
-    for token in tokens:
-        token_label = dict_match(token)
-        if token_label:
-            return normalize_label(token_label), max(model_conf, 0.68)
+        # 2b. Nếu model tự tin, dùng model
+        if model_conf >= threshold:
+            return model_label, model_conf
 
-    # 5. Nếu không có dictionary, dùng model nếu confidence đủ
-    if model_label and model_conf >= threshold:
-        return model_label, model_conf
+        # 2c. Kiểm tra từng token
+        tokens = clean.split()
+        for token in tokens:
+            token_label = dict_match(token)
+            if token_label:
+                return normalize_label(token_label), max(model_conf, 0.68)
 
-    # 6. Fallback NEUTRAL
-    return "NEUTRAL", max(model_conf, 0.5)
+        # 2d. Nếu không tìm thấy gì, fallback NEUTRAL
+        return "NEUTRAL", max(model_conf, 0.5)
 
+    except Exception as e:
+        # Nếu model lỗi, fallback dictionary
+        dic_label = dict_match(clean)
+        if dic_label:
+            return normalize_label(dic_label), 0.75
+        return "NEUTRAL", 0.5
 
 # =======================================================
 # 11. SQLITE
