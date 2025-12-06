@@ -249,7 +249,7 @@ def get_emoji(label):
 # =======================================================
 # 9. PHÂN LOẠI SENTIMENT (CẢI TIẾN)
 # =======================================================
-def classify_sentiment(text, threshold=0.55):  # Giảm threshold
+def classify_sentiment(text, threshold=0.5):  # Giảm threshold
     clean = preprocess(text)
     if clean is None:
         return None, 0.0
