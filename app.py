@@ -210,19 +210,11 @@ def get_emoji(label):
 # 10. PHÂN LOẠI SENTIMENT
 # =======================================================
 def classify_sentiment(text, threshold=0.5):
-    """
-    Phân loại cảm xúc tiếng Việt
-    1. Rule phủ định
-    2. PhoBERT fine-tuned
-    3. Dictionary toàn câu
-    4. Token-level dictionary
-    5. Fallback NEUTRAL
-    """
     clean = preprocess(text)
     if clean is None:
         return None, 0.0
 
-    # 1. Rule phủ định (ưu tiên cao nhất)
+    # 1. Rule phủ định
     neg_label = negation_rule(clean)
     if neg_label:
         return normalize_label(neg_label), 0.92
@@ -233,27 +225,33 @@ def classify_sentiment(text, threshold=0.5):
         model_label = normalize_label(result['label'])
         model_conf = result['score']
 
-        # 2a. Check dictionary toàn câu
-        dic_label = dict_match(clean)
-        if dic_label:
-            return normalize_label(dic_label), min(model_conf + 0.15, 0.85)
-
-        # 2b. Nếu model tự tin
+        # Nếu model tự tin trước
         if model_conf >= threshold:
-            return model_label, model_conf
+            dic_label = dict_match(clean)
+            if dic_label:
+                # Dictionary match, ưu tiên dictionary nhưng confidence vẫn dựa vào model
+                return normalize_label(dic_label), min(model_conf + 0.15, 0.85)
+            else:
+                # Không có dictionary, dùng model
+                return model_label, model_conf
+        else:
+            # Model không tự tin, check dictionary toàn câu
+            dic_label = dict_match(clean)
+            if dic_label:
+                return normalize_label(dic_label), min(model_conf + 0.15, 0.85)
 
-        # 2c. Token-level dictionary
-        tokens = clean.split()
-        for token in tokens:
-            token_label = dict_match(token)
-            if token_label:
-                return normalize_label(token_label), max(model_conf, 0.68)
+            # Check từng token
+            tokens = clean.split()
+            for token in tokens:
+                token_label = dict_match(token)
+                if token_label:
+                    return normalize_label(token_label), max(model_conf, 0.68)
 
-        # 2d. Fallback NEUTRAL
-        return "NEUTRAL", max(model_conf, 0.5)
+            # Fallback NEUTRAL
+            return "NEUTRAL", max(model_conf, 0.5)
 
     except Exception as e:
-        # Nếu model lỗi
+        # Nếu model lỗi, fallback dictionary
         dic_label = dict_match(clean)
         if dic_label:
             return normalize_label(dic_label), 0.75
