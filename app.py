@@ -13,7 +13,7 @@ from utils.teencode_dict import normalize_teencode, remove_accents
 from utils.test_case import test_cases  # 10 case chuẩn thầy
 
 # ========================================
-# 1. Pipeline PhoBERT
+# 1. Load PhoBERT pipeline
 # ========================================
 @st.cache_resource
 def load_classifier():
@@ -23,7 +23,7 @@ def load_classifier():
 classifier = load_classifier()
 
 # ========================================
-# 2. Dictionary 25 từ sentiment
+# 2. Dictionary 25 từ
 # ========================================
 sentiment_dict = {
     "vui": "POSITIVE", "tuyệt": "POSITIVE", "hay": "POSITIVE", "đỉnh": "POSITIVE", "thích": "POSITIVE",
@@ -35,7 +35,7 @@ sentiment_dict = {
 }
 
 # ========================================
-# 3. Tiền xử lý
+# 3. Preprocess text
 # ========================================
 def preprocess(text):
     if not isinstance(text, str):
@@ -87,18 +87,21 @@ def dict_match(text):
     tokens = t.split()
     tokens_no = t_no.split()
     for key, label in sentiment_dict.items():
-        if " " not in key_norm and (key.lower() in tokens or remove_accents(key.lower()) in tokens_no):
+        if " " not in key and (key.lower() in tokens or remove_accents(key.lower()) in tokens_no):
             return label
     return None
 
 # ========================================
-# 6. Classify sentiment
+# 6. Normalize label
 # ========================================
 def normalize_label(label):
     mapping = {"POS": "POSITIVE", "NEG": "NEGATIVE", "NEU": "NEUTRAL",
                "POSITIVE":"POSITIVE","NEGATIVE":"NEGATIVE","NEUTRAL":"NEUTRAL"}
     return mapping.get(label.upper(), label.upper())
 
+# ========================================
+# 7. Classify sentiment
+# ========================================
 def classify_sentiment(text, threshold=0.5):
     clean = preprocess(text)
     if clean is None:
@@ -109,7 +112,6 @@ def classify_sentiment(text, threshold=0.5):
     dic_label = dict_match(clean)
     if dic_label:
         return normalize_label(dic_label), 0.99
-    # PhoBERT pipeline
     result = classifier(clean)[0]
     label = normalize_label(result['label'])
     confidence = result['score']
@@ -118,7 +120,7 @@ def classify_sentiment(text, threshold=0.5):
     return label, confidence
 
 # ========================================
-# 7. SQLite
+# 8. SQLite
 # ========================================
 def init_db():
     conn = sqlite3.connect('history.db')
@@ -142,7 +144,7 @@ def save_result(text, sentiment):
 init_db()
 
 # ========================================
-# 8. Streamlit UI
+# 9. Streamlit UI
 # ========================================
 st.title("Trợ lý Phân loại Cảm xúc Tiếng Việt")
 st.markdown("Dùng PhoBERT để phân tích cảm xúc từ văn bản tiếng Việt.")
@@ -168,21 +170,22 @@ if st.checkbox("Xem lịch sử"):
     st.dataframe(df)
 
 # ========================================
-# 9. Testcase
+# 10. Testcase
 # ========================================
 st.sidebar.header("Test Độ Chính Xác")
 if st.sidebar.button("Chạy 10 test case"):
     correct = 0
     results = []
     for case in test_cases:
-        pred, conf = classify_sentiment(case["expected_text"] if "expected_text" in case else case["text"])
-        pred = pred if pred else "NEUTRAL"
+        text_case = case.get("text") or case.get("expected_text")
         expected = case.get("expected","NEUTRAL")
+        pred, conf = classify_sentiment(text_case)
+        pred = pred if pred else "NEUTRAL"
         ok = pred.upper() == expected.upper()
         if ok:
             correct += 1
         results.append({
-            "Câu": case["text"],
+            "Câu": text_case,
             "Dự đoán": pred.upper(),
             "Mong đợi": expected.upper(),
             "Kết quả": "✔️ Đúng" if ok else "❌ Sai"
@@ -190,5 +193,3 @@ if st.sidebar.button("Chạy 10 test case"):
     acc = correct/len(test_cases)*100
     st.sidebar.success(f"Độ chính xác: {acc:.1f}% ({correct}/{len(test_cases)})")
     st.sidebar.dataframe(pd.DataFrame(results))
-
-
