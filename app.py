@@ -1,6 +1,7 @@
 # ========================================
-# ĐỒ ÁN: TRỢ LÝ PHÂN LOẠI CẢM XÚC TIẾNG VIỆT
-# Theo hướng dẫn thầy: PhoBERT + Dictionary + Threshold + SQLite LIMIT 50
+# ĐỒ ÁN: TRỢ LÝ PHÂN LOẠI CẢM XÚC TIẾNG VIỆT - FINAL
+# Kết hợp: PhoBERT (AutoModel) + Dictionary + Rule phủ định +
+#          Normalize teencode + underthesea + SQLite + Testcases
 # ========================================
 
 import streamlit as st
@@ -9,21 +10,26 @@ import torch
 import sqlite3
 from datetime import datetime
 import pandas as pd
-from underthesea import word_tokenize  # Theo thầy: underthesea
-from utils.teencode_dict import normalize_teencode  # Giữ lại theo yêu cầu
-from utils.test_case import test_cases  # Test case từ file riêng
+from underthesea import word_tokenize
+import unicodedata
+from utils.test_case import test_cases           # file testcases tách riêng
+from utils.teencode_dict import normalize_teencode  # hàm bạn đã chuẩn hóa
 
-# === 1. Tải mô hình PhoBERT (theo thầy) ===
+# ---------------------------
+# 1. Load PhoBERT (AutoModel) - cached
+# ---------------------------
 @st.cache_resource
 def load_model():
-    model_name = "wonrax/phobert-base-vietnamese-sentiment"  # PhoBERT fine-tune VN
+    model_name = "wonrax/phobert-base-vietnamese-sentiment"
     tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False)
     model = AutoModelForSequenceClassification.from_pretrained(model_name)
     return tokenizer, model
 
 tokenizer, model = load_model()
 
-# === 2. Dictionary 25 từ sentiment (theo thầy) ===
+# ---------------------------
+# 2. Dictionary 25 từ
+# ---------------------------
 sentiment_dict = {
     "vui": "POSITIVE", "tuyệt": "POSITIVE", "hay": "POSITIVE", "đỉnh": "POSITIVE", "thích": "POSITIVE",
     "yêu": "POSITIVE", "ok": "NEUTRAL", "ổn": "NEUTRAL", "bình thường": "NEUTRAL", "cũng được": "NEUTRAL",
@@ -33,130 +39,225 @@ sentiment_dict = {
     "bực mình": "NEGATIVE", "mệt mỏi": "NEGATIVE"
 }
 
-# === 3. Preprocessing (theo thầy + normalize teencode) ===
-def preprocess_text(text):
-    text = normalize_teencode(text)  # Giữ nguyên theo yêu cầu bạn
-    text = text.lower()
+# ---------------------------
+# Helpers: remove accents, normalize label
+# ---------------------------
+def remove_accents(text: str) -> str:
+    text = unicodedata.normalize('NFD', text)
+    text = text.encode('ascii', 'ignore').decode('utf-8')
+    return text
 
-    # Giới hạn ký tự (theo thầy)
-    if len(text) < 5 or len(text) > 50:
+def normalize_label(label):
+    """Chuẩn hoá nhãn đầu ra/expected thành POSITIVE/NEGATIVE/NEUTRAL"""
+    if label is None:
+        return "NONE"
+    s = str(label).strip().upper()
+    if s.startswith("POS"):
+        return "POSITIVE"
+    if s.startswith("NEG"):
+        return "NEGATIVE"
+    if s.startswith("NEU") or s == "NONE":
+        return "NEUTRAL" if s.startswith("NEU") else "NONE"
+    # nếu là số id
+    if s == "0":
+        return "NEGATIVE"
+    if s == "1":
+        return "POSITIVE"
+    if s == "2":
+        return "NEUTRAL"
+    return s
+
+# ---------------------------
+# Match dictionary (cụm từ trước, từ đơn sau) - hỗ trợ no-accent
+# ---------------------------
+def dict_match(text: str):
+    t = text.lower().strip()
+    t_no = remove_accents(t)
+    tokens = t.split()
+    tokens_no = t_no.split()
+
+    # cụm nhiều từ trước
+    for key, label in sentiment_dict.items():
+        key_norm = key.lower()
+        key_no = remove_accents(key_norm)
+        if " " in key_norm:
+            if key_norm in t or key_no in t_no:
+                return label
+
+    # từ đơn
+    for key, label in sentiment_dict.items():
+        key_norm = key.lower()
+        key_no = remove_accents(key_norm)
+        if " " not in key_norm:
+            if key_norm in tokens or key_no in tokens_no:
+                return label
+    return None
+
+# ---------------------------
+# Rule phủ định (ví dụ: "không vui" -> NEGATIVE)
+# ---------------------------
+def negation_rule(text: str):
+    text_low = text.lower()
+    no_acc = remove_accents(text_low)
+    # tìm "khong " không dấu hoặc "không " có dấu
+    if "khong " in no_acc or "không " in text_low:
+        positive_words = ["vui", "vui vẻ", "tuyệt", "thích",
+                          "yêu", "hạnh phúc", "hay", "đỉnh", "cảm ơn"]
+        negative_words = ["buồn", "chán", "ghét", "tồi", "dở",
+                          "thất vọng", "khó chịu", "tệ", "mệt", "mệt mỏi"]
+        for w in positive_words:
+            if f"khong {remove_accents(w)}" in no_acc:
+                return "NEGATIVE"
+        for w in negative_words:
+            if f"khong {remove_accents(w)}" in no_acc:
+                return "NEUTRAL"
+    return None
+
+# ---------------------------
+# 3. Preprocessing: normalize teencode -> lowercase -> tokenization -> length checks
+# ---------------------------
+def preprocess_text(text: str):
+    if text is None:
         return None
 
-    words = word_tokenize(text)
+    # 1) normalize teencode (từ utils)
+    try:
+        text = normalize_teencode(text)
+    except Exception:
+        # fallback: nếu import normalize_teencode có vấn đề, dùng nguyên input
+        pass
 
-    # Giới hạn số từ (theo thầy)
-    if len(words) < 2 or len(words) > 20:
+    text = text.lower().strip()
+
+    # giới hạn ký tự (theo thầy)
+    if len(text) < 5 or len(text) > 120:  # hơi nới hạn tối đa để cover teencode dài
         return None
 
-    return ' '.join(words)
+    # tokenize bằng underthesea
+    try:
+        words = word_tokenize(text)
+    except Exception:
+        # fallback: split nếu underthesea lỗi
+        words = text.split()
 
-# === 4. Phân loại (dictionary → model → threshold 0.5) ===
-def classify_sentiment(text):
-    preprocessed = preprocess_text(text)
-    if preprocessed is None:
-        return None, 0
+    if len(words) < 2 or len(words) > 40:  # giới hạn từ (nới chút để cover)
+        return None
 
-    # Kiểm tra dictionary trước
-    for word, label in sentiment_dict.items():
-        if word in preprocessed:
-            return label, 0.99  # High confidence dictionary
+    # trả về chuỗi đã token (join) để dễ match dictionary
+    return " ".join(words)
 
-    # Dùng model (PhoBERT)
-    inputs = tokenizer(preprocessed, return_tensors="pt", truncation=True, padding=True, max_length=256)
-    with torch.no_grad():
-        outputs = model(**inputs)
-        probs = torch.nn.functional.softmax(outputs.logits, dim=-1)
-        confidence = torch.max(probs).item()
-        predicted_id = torch.argmax(probs).item()
+# ---------------------------
+# 4. Classification: dictionary -> negation -> model -> threshold
+# ---------------------------
+def classify_sentiment(text: str, threshold=0.5):
+    """Trả về (label, confidence). Nếu không hợp lệ trả về (None, 0.0)."""
+    clean = preprocess_text(text)
+    if clean is None:
+        return None, 0.0
 
-    # Threshold (theo thầy)
-    if confidence < 0.5:
+    # 1) rule phủ định (dùng trên bản tokenized text)
+    neg_label = negation_rule(clean)
+    if neg_label:
+        return normalize_label(neg_label), 0.98
+
+    # 2) dictionary ưu tiên
+    dic_label = dict_match(clean)
+    if dic_label:
+        return normalize_label(dic_label), 0.99
+
+    # 3) model
+    try:
+        inputs = tokenizer(clean, return_tensors="pt", truncation=True, padding=True, max_length=256)
+        with torch.no_grad():
+            outputs = model(**inputs)
+            probs = torch.nn.functional.softmax(outputs.logits, dim=-1)
+            confidence = float(torch.max(probs).item())
+            pred_id = int(torch.argmax(probs).item())
+    except Exception as e:
+        # nếu model lỗi, trả NEUTRAL an toàn
+        return "NEUTRAL", 0.0
+
+    # threshold quy ước
+    if confidence < threshold:
         return "NEUTRAL", confidence
 
-    label_map = {0: "NEGATIVE", 1: "POSITIVE", 2: "NEUTRAL"}
-    return label_map[predicted_id], confidence
+    id2label = {0: "NEGATIVE", 1: "POSITIVE", 2: "NEUTRAL"}
+    return id2label.get(pred_id, "NEUTRAL"), confidence
 
-# === 5. Khởi tạo DB SQLite ===
+# ---------------------------
+# 5. SQLite init & save
+# ---------------------------
 def init_db():
-    conn = sqlite3.connect('history.db')
-    c = conn.cursor()
-    c.execute('''
+    conn = sqlite3.connect("history.db")
+    conn.execute("""
         CREATE TABLE IF NOT EXISTS sentiments (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             text TEXT,
             sentiment TEXT,
             timestamp TEXT
         )
-    ''')
+    """)
+    conn.commit()
+    conn.close()
+
+def save_result(text: str, sentiment: str):
+    conn = sqlite3.connect("history.db")
+    timestamp = datetime.now().isoformat()
+    conn.execute("INSERT INTO sentiments (text, sentiment, timestamp) VALUES (?, ?, ?)",
+                 (text, sentiment, timestamp))
     conn.commit()
     conn.close()
 
 init_db()
 
-# === 6. Lưu kết quả (parameterized query) ===
-def save_result(text, sentiment):
-    conn = sqlite3.connect('history.db')
-    c = conn.cursor()
-    timestamp = datetime.now().isoformat()
-    c.execute(
-        'INSERT INTO sentiments (text, sentiment, timestamp) VALUES (?, ?, ?)',
-        (text, sentiment, timestamp)
-    )
-    conn.commit()
-    conn.close()
-
-# === 7. Giao diện Streamlit ===
+# ---------------------------
+# 6. Streamlit UI
+# ---------------------------
+st.set_page_config(page_title="Trợ lý Phân loại Cảm xúc Tiếng Việt", layout="centered")
 st.title("Trợ lý Phân loại Cảm xúc Tiếng Việt")
-st.markdown("Dùng PhoBERT để phân tích cảm xúc từ văn bản tiếng Việt.")
+st.markdown("Dùng **PhoBERT** + dictionary + rule phủ định + teencode normalization để phân tích cảm xúc tiếng Việt.")
 
-text_input = st.text_area("Nhập câu tiếng Việt:", height=120)
+text_input = st.text_area("Nhập câu tiếng Việt:", height=140, placeholder="Gõ câu vào đây...")
 
-if st.button("Phân loại cảm xúc"):
-    if not text_input.strip():
-        st.error("Câu quá ngắn hoặc không hợp lệ!")
-    else:
-        with st.spinner("Đang phân tích..."):
-            sentiment, score = classify_sentiment(text_input)
-            if sentiment is None:
-                st.error("Câu không hợp lệ (quá ngắn/dài hoặc không có cảm xúc)!")
-            else:
-                st.success(f"**Kết quả: {sentiment}** (Độ tin cậy: {score:.2%})")
-                save_result(text_input, sentiment)
+col1, col2 = st.columns([2, 1])
+with col2:
+    if st.button("Phân loại cảm xúc"):
+        if not text_input or not text_input.strip():
+            st.error("Câu quá ngắn hoặc không hợp lệ!")
+        else:
+            with st.spinner("Đang phân tích..."):
+                label, score = classify_sentiment(text_input)
+                if label is None:
+                    st.error("Câu không hợp lệ (quá ngắn/dài hoặc số từ không đúng).")
+                else:
+                    st.success(f"**Kết quả:** {label}  •  (Độ tin cậy: {score*100:.1f}%)")
+                    save_result(text_input, label)
 
-# === 8. Hiển thị lịch sử 50 dòng mới nhất ===
-if st.checkbox("Xem lịch sử"):
-    conn = sqlite3.connect('history.db')
-    df = pd.read_sql_query(
-        "SELECT id, text, sentiment, timestamp FROM sentiments ORDER BY timestamp DESC LIMIT 50",
-        conn
-    )
+# history
+if st.checkbox("Xem lịch sử (50 gần nhất)"):
+    conn = sqlite3.connect("history.db")
+    df = pd.read_sql_query("SELECT id, text, sentiment, timestamp FROM sentiments ORDER BY timestamp DESC LIMIT 50", conn)
     conn.close()
-
     if not df.empty:
         st.dataframe(df)
     else:
         st.info("Chưa có dữ liệu.")
 
-# === 9. Sidebar – Test 10 test case ===
-st.sidebar.header("Kiểm thử mô hình")
+# ---------------------------
+# Sidebar: kiểm thử
+# ---------------------------
+st.sidebar.header("Kiểm thử mô hình (Testcases)")
 
-# Chuẩn hóa label cho an toàn (POSITIVE/positive/Positive → POSITIVE)
-def normalize_label(label: str):
-    return label.strip().upper()
-
-if st.sidebar.button("Chạy kiểm thử"):
+def run_tests_and_show():
     correct = 0
     results = []
-
     for case in test_cases:
         pred, conf = classify_sentiment(case["text"])
         pred_norm = normalize_label(pred)
-        expected_norm = normalize_label(case["expected"])
+        expected_norm = normalize_label(case.get("expected") or case.get("true"))
         ok = (pred_norm == expected_norm)
-
         if ok:
             correct += 1
-
         results.append({
             "Câu": case["text"],
             "Dự đoán": pred_norm,
@@ -164,10 +265,12 @@ if st.sidebar.button("Chạy kiểm thử"):
             "Mong đợi": expected_norm,
             "Kết quả": "✔️ Đúng" if ok else "❌ Sai"
         })
+    acc = correct / len(test_cases) * 100 if test_cases else 0.0
+    return correct, acc, results
 
-    acc = correct / len(test_cases) * 100
-    st.sidebar.success(f"🎉 Kết quả: {correct}/{len(test_cases)} = {acc:.1f}%")
-
-    # Hiển thị chi tiết ở main area để không bị chật sidebar
+if st.sidebar.button("Chạy kiểm thử"):
+    correct, acc, results = run_tests_and_show()
+    st.sidebar.success(f"🎉 Tổng: {correct}/{len(test_cases)} = {acc:.1f}%")
     st.subheader("📊 Kết quả chi tiết từng test")
     st.dataframe(pd.DataFrame(results))
+
