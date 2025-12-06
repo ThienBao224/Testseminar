@@ -137,14 +137,15 @@ def dict_match(text):
     t = text.lower().replace("_", " ").strip()
     t_no = remove_accents(t)
 
-    # Sắp xếp theo độ dài key giảm dần để match cụm từ trước
     sorted_keys = sorted(sentiment_dict.keys(), key=lambda x: -len(x.split()))
     for key in sorted_keys:
         key_norm = key.lower().replace("_", " ")
         key_no = remove_accents(key_norm)
-        if key_norm in t or key_no in t_no:
+        # Match trên cả dạng có dấu và không dấu
+        if key_norm in t or key_no in t or key_no in t_no:
             return sentiment_dict[key]
     return None
+
 
 # =======================================================
 # 7. KHÔI PHỤC DẤU
