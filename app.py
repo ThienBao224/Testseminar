@@ -209,7 +209,7 @@ def get_emoji(label):
 # =======================================================
 # 10. PHÂN LOẠI SENTIMENT
 # =======================================================
-def classify_sentiment(text, threshold=0.55):
+def classify_sentiment(text, threshold=0.5):
     clean = preprocess(text)
     if clean is None:
         return None, 0.0
@@ -232,7 +232,7 @@ def classify_sentiment(text, threshold=0.55):
     dic_label = dict_match(clean)
     if dic_label:
         # Nếu dictionary có, luôn ưu tiên dictionary
-        return normalize_label(dic_label), max(model_conf, 0.75)
+        return normalize_label(dic_label), min(confidence + 0.15, 0.85)
 
     # 4. Token-level check
     tokens = clean.split()
