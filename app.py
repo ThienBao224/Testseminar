@@ -154,19 +154,24 @@ accent_dict = {
 # 6. MATCH DICTIONARY (CẢI TIẾN)
 # =======================================================
 def dict_match(text):
-    t = text.lower().strip()
+    if not text:
+        return None
+
+    # Chuẩn hóa: lowercase, bỏ dấu, thay _ bằng space
+    t = text.lower().replace("_", " ").strip()
     t_no = remove_accents(t)
     
-    # Ưu tiên cụm từ dài trước (3-4 từ)
+    # Ưu tiên cụm từ dài trước
     sorted_keys = sorted(sentiment_dict.keys(), key=lambda x: -len(x.split()))
     
     for key in sorted_keys:
-        key_norm = key.lower()
+        key_norm = key.lower().replace("_", " ")
         key_no = remove_accents(key_norm)
         if key_norm in t or key_no in t_no:
             return sentiment_dict[key]
     
     return None
+
 # =======================================================
 # KHÔI PHỤC DẤU TIẾNG VIỆT (CHỈ ĐỂ HIỂN THỊ)
 # =======================================================
