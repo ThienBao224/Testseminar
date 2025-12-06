@@ -9,21 +9,21 @@ import torch
 import sqlite3
 from datetime import datetime
 import pandas as pd
-from underthesea import word_tokenize
-import threading
-from utils.test_case import test_cases
-from utils.teencode_dict import normalize_teencode
+from underthesea import word_tokenize  # Theo thầy: underthesea
+from utils.teencode_dict import normalize_teencode  # Giữ lại theo yêu cầu
+from utils.test_case import test_cases  # Test case từ file riêng
 
-
+# === 1. Tải mô hình PhoBERT (theo thầy) ===
 @st.cache_resource
 def load_model():
-    model_name = "wonrax/phobert-base-vietnamese-sentiment"
+    model_name = "wonrax/phobert-base-vietnamese-sentiment"  # PhoBERT fine-tune VN
     tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False)
     model = AutoModelForSequenceClassification.from_pretrained(model_name)
     return tokenizer, model
 
 tokenizer, model = load_model()
 
+# === 2. Dictionary 25 từ sentiment (theo thầy) ===
 sentiment_dict = {
     "vui": "POSITIVE", "tuyệt": "POSITIVE", "hay": "POSITIVE", "đỉnh": "POSITIVE", "thích": "POSITIVE",
     "yêu": "POSITIVE", "ok": "NEUTRAL", "ổn": "NEUTRAL", "bình thường": "NEUTRAL", "cũng được": "NEUTRAL",
@@ -33,32 +33,35 @@ sentiment_dict = {
     "bực mình": "NEGATIVE", "mệt mỏi": "NEGATIVE"
 }
 
+# === 3. Preprocessing (theo thầy + normalize teencode) ===
 def preprocess_text(text):
-    # --- bước 1: chuẩn hóa teencode ---
-    text = normalize_teencode(text)
-
-    # --- bước 2: hạ chữ + kiểm tra độ dài ---
+    text = normalize_teencode(text)  # Giữ nguyên theo yêu cầu bạn
     text = text.lower()
+
+    # Giới hạn ký tự (theo thầy)
     if len(text) < 5 or len(text) > 50:
         return None
 
-    # --- bước 3: tokenize bằng underthesea ---
     words = word_tokenize(text)
+
+    # Giới hạn số từ (theo thầy)
     if len(words) < 2 or len(words) > 20:
         return None
-    
+
     return ' '.join(words)
 
-
+# === 4. Phân loại (dictionary → model → threshold 0.5) ===
 def classify_sentiment(text):
     preprocessed = preprocess_text(text)
     if preprocessed is None:
         return None, 0
 
+    # Kiểm tra dictionary trước
     for word, label in sentiment_dict.items():
         if word in preprocessed:
-            return label, 0.99
+            return label, 0.99  # High confidence dictionary
 
+    # Dùng model (PhoBERT)
     inputs = tokenizer(preprocessed, return_tensors="pt", truncation=True, padding=True, max_length=256)
     with torch.no_grad():
         outputs = model(**inputs)
@@ -66,12 +69,14 @@ def classify_sentiment(text):
         confidence = torch.max(probs).item()
         predicted_id = torch.argmax(probs).item()
 
+    # Threshold (theo thầy)
     if confidence < 0.5:
         return "NEUTRAL", confidence
 
     label_map = {0: "NEGATIVE", 1: "POSITIVE", 2: "NEUTRAL"}
     return label_map[predicted_id], confidence
 
+# === 5. Khởi tạo DB SQLite ===
 def init_db():
     conn = sqlite3.connect('history.db')
     c = conn.cursor()
@@ -88,15 +93,19 @@ def init_db():
 
 init_db()
 
+# === 6. Lưu kết quả (parameterized query) ===
 def save_result(text, sentiment):
     conn = sqlite3.connect('history.db')
     c = conn.cursor()
     timestamp = datetime.now().isoformat()
-    c.execute('INSERT INTO sentiments (text, sentiment, timestamp) VALUES (?, ?, ?)',
-              (text, sentiment, timestamp))
+    c.execute(
+        'INSERT INTO sentiments (text, sentiment, timestamp) VALUES (?, ?, ?)',
+        (text, sentiment, timestamp)
+    )
     conn.commit()
     conn.close()
 
+# === 7. Giao diện Streamlit ===
 st.title("Trợ lý Phân loại Cảm xúc Tiếng Việt")
 st.markdown("Dùng PhoBERT để phân tích cảm xúc từ văn bản tiếng Việt.")
 
@@ -114,15 +123,21 @@ if st.button("Phân loại cảm xúc"):
                 st.success(f"**Kết quả: {sentiment}** (Độ tin cậy: {score:.2%})")
                 save_result(text_input, sentiment)
 
+# === 8. Hiển thị lịch sử 50 dòng mới nhất ===
 if st.checkbox("Xem lịch sử"):
     conn = sqlite3.connect('history.db')
-    df = pd.read_sql_query("SELECT id, text, sentiment, timestamp FROM sentiments ORDER BY timestamp DESC LIMIT 50", conn)
+    df = pd.read_sql_query(
+        "SELECT id, text, sentiment, timestamp FROM sentiments ORDER BY timestamp DESC LIMIT 50",
+        conn
+    )
     conn.close()
+
     if not df.empty:
         st.dataframe(df)
     else:
         st.info("Chưa có dữ liệu.")
 
+# === 9. Sidebar – Test 10 test case ===
 st.sidebar.header("Test Độ Chính Xác")
 
 if st.sidebar.button("Chạy 10 test case"):
@@ -131,5 +146,6 @@ if st.sidebar.button("Chạy 10 test case"):
         sentiment, _ = classify_sentiment(case["text"])
         if sentiment == case["true"]:
             correct += 1
-    accuracy = (correct / len(test_cases)) * 100
+
+    accuracy = correct / len(test_cases) * 100
     st.sidebar.success(f"Độ chính xác: {accuracy:.1f}% ({correct}/{len(test_cases)})")
