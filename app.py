@@ -230,22 +230,20 @@ def classify_sentiment(text, threshold=0.5):
 
         if model_conf >= threshold:
             # Model tự tin
-        if model_conf >= threshold:
             if dic_label and normalize_label(dic_label) != model_label:
-                # Nếu dictionary khác nhãn, ưu tiên dictionary nhưng confidence hợp lý
-                adjusted_conf = min(model_conf + 0.1, 0.99) 
+                # Dictionary khác model → ưu tiên dictionary, confidence hợp lý
+                adjusted_conf = round((model_conf + 0.8) / 2, 2)  # trung bình model_conf + 0.8
                 return normalize_label(dic_label), adjusted_conf
             else:
                 # Dictionary giống model hoặc không có, dùng model
                 return model_label, model_conf
-
         else:
             # Model không tự tin, check dictionary
             if dic_label:
                 adjusted_conf = min(model_conf + 0.15, 0.85)
                 return normalize_label(dic_label), adjusted_conf
 
-            # Token-level
+            # Token-level dictionary
             tokens = clean.split()
             for token in tokens:
                 token_label = dict_match(token)
@@ -257,7 +255,7 @@ def classify_sentiment(text, threshold=0.5):
             return "NEUTRAL", max(model_conf, 0.5)
 
     except Exception as e:
-        # Nếu model lỗi
+        # Nếu model lỗi, fallback dictionary
         dic_label = dict_match(clean)
         if dic_label:
             return normalize_label(dic_label), 0.75
