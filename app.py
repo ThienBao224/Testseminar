@@ -138,14 +138,36 @@ if st.checkbox("Xem lịch sử"):
         st.info("Chưa có dữ liệu.")
 
 # === 9. Sidebar – Test 10 test case ===
-st.sidebar.header("Test Độ Chính Xác")
+st.sidebar.header("Kiểm thử mô hình")
 
-if st.sidebar.button("Chạy 10 test case"):
+# Chuẩn hóa label cho an toàn (POSITIVE/positive/Positive → POSITIVE)
+def normalize_label(label: str):
+    return label.strip().upper()
+
+if st.sidebar.button("Chạy kiểm thử"):
     correct = 0
+    results = []
+
     for case in test_cases:
-        sentiment, _ = classify_sentiment(case["text"])
-        if sentiment == case["true"]:
+        pred, conf = classify_sentiment(case["text"])
+        pred_norm = normalize_label(pred)
+        expected_norm = normalize_label(case["expected"])
+        ok = (pred_norm == expected_norm)
+
+        if ok:
             correct += 1
 
-    accuracy = correct / len(test_cases) * 100
-    st.sidebar.success(f"Độ chính xác: {accuracy:.1f}% ({correct}/{len(test_cases)})")
+        results.append({
+            "Câu": case["text"],
+            "Dự đoán": pred_norm,
+            "Độ tin cậy": f"{conf*100:.1f}%",
+            "Mong đợi": expected_norm,
+            "Kết quả": "✔️ Đúng" if ok else "❌ Sai"
+        })
+
+    acc = correct / len(test_cases) * 100
+    st.sidebar.success(f"🎉 Kết quả: {correct}/{len(test_cases)} = {acc:.1f}%")
+
+    # Hiển thị chi tiết ở main area để không bị chật sidebar
+    st.subheader("📊 Kết quả chi tiết từng test")
+    st.dataframe(pd.DataFrame(results))
