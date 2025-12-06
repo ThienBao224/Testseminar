@@ -219,41 +219,34 @@ def classify_sentiment(text, threshold=0.55):
     if neg_label:
         return normalize_label(neg_label), 0.92
 
-    # 2. Dictionary - ƯU TIÊN DÙNG MODEL TRƯỚC
-    # Chỉ dùng dictionary khi model không tự tin
-    
-    # 3. PhoBERT fine-tuned (ƯU TIÊN!)
+    # 2. PhoBERT dự đoán
     try:
         result = classifier(clean)[0]
-        label = normalize_label(result['label'])
-        confidence = result['score']
-        
-        # Nếu model tự tin (>= threshold), tin model
-        if confidence >= threshold:
-            return label, confidence
-        
-        # Nếu model không tự tin, check dictionary
-        dic_label = dict_match(clean)
-        if dic_label:
-            # Dictionary tìm thấy, nhưng confidence thấp hơn model thật
-            return normalize_label(dic_label), min(confidence + 0.15, 0.85)
-        
-        # Nếu confidence thấp và không có trong dictionary, check từng từ
-        tokens = clean.split()
-        for token in tokens:
-            token_label = dict_match(token)
-            if token_label:
-                return normalize_label(token_label), 0.68
-        
-        # Không tìm thấy gì, gán NEUTRAL với confidence thấp
-        return "NEUTRAL", confidence
-        
-    except Exception as e:
-        # Nếu model lỗi, dùng dictionary
-        dic_label = dict_match(clean)
-        if dic_label:
-            return normalize_label(dic_label), 0.75
-        return "NEUTRAL", 0.5
+        model_label = normalize_label(result['label'])
+        model_conf = result['score']
+    except:
+        model_label = None
+        model_conf = 0.0
+
+    # 3. Dictionary check toàn câu
+    dic_label = dict_match(clean)
+    if dic_label:
+        # Nếu dictionary có, luôn ưu tiên dictionary
+        return normalize_label(dic_label), max(model_conf, 0.75)
+
+    # 4. Token-level check
+    tokens = clean.split()
+    for token in tokens:
+        token_label = dict_match(token)
+        if token_label:
+            return normalize_label(token_label), max(model_conf, 0.68)
+
+    # 5. Nếu không có dictionary, dùng model nếu confidence đủ
+    if model_label and model_conf >= threshold:
+        return model_label, model_conf
+
+    # 6. Fallback NEUTRAL
+    return "NEUTRAL", max(model_conf, 0.5)
 
 
 # =======================================================
