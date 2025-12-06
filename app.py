@@ -134,15 +134,15 @@ def dict_match(text):
     if not text:
         return None
 
-    t = text.lower().replace("_", " ").strip()
+    t = text.lower().strip()
     t_no = remove_accents(t)
 
-    # Sắp xếp theo độ dài key giảm dần để match cụm từ trước
     sorted_keys = sorted(sentiment_dict.keys(), key=lambda x: -len(x.split()))
     for key in sorted_keys:
-        key_norm = key.lower().replace("_", " ")
+        key_norm = key.lower().strip()
         key_no = remove_accents(key_norm)
-        if key_norm in t or key_no in t_no:
+        # Match trên text có dấu hoặc không dấu
+        if key_norm in t or key_no in t or key_no in t_no:
             return sentiment_dict[key]
     return None
 
@@ -202,8 +202,8 @@ def get_emoji(label):
 # =======================================================
 # 10. PHÂN LOẠI SENTIMENT
 # =======================================================
-def classify_sentiment(text, threshold=0.7):
-    # 1. Tiền xử lý: lowercase + restore accents + expand viết tắt
+def classify_sentiment(text, threshold=0.5):
+    # 1. Tiền xử lý: lowercase + bỏ khoảng trắng + restore accents
     clean = preprocess(text)
     if clean is None:
         return None, 0.0
@@ -211,29 +211,35 @@ def classify_sentiment(text, threshold=0.7):
     # 2. Rule phủ định (ưu tiên cao nhất)
     neg_label = negation_rule(clean)
     if neg_label:
-        return normalize_label(neg_label), 0.98
+        return normalize_label(neg_label), 0.92
 
-    # 3. Dictionary mạnh (ưu tiên)
+    # 3. Dictionary toàn câu (ưu tiên mạnh)
     dic_label = dict_match(clean)
     if dic_label:
-        return normalize_label(dic_label), 0.99
+        return normalize_label(dic_label), 0.85
 
-    # 4. PhoBERT fine-tuned
+    # 4. Model PhoBERT (chỉ dùng khi không có dictionary)
     try:
         result = classifier(clean)[0]
-        label = normalize_label(result['label'])
-        confidence = result['score']
+        model_label = normalize_label(result['label'])
+        model_conf = result['score']
 
-        # 5. Câu ngắn + confidence thấp → NEUTRAL
-        if len(clean.split()) <= 5 and confidence < threshold:
-            label = "NEUTRAL"
+        # Nếu model tự tin, dùng model
+        if model_conf >= threshold:
+            return model_label, model_conf
 
-        return label, confidence
+        # Kiểm tra từng token
+        tokens = clean.split()
+        for token in tokens:
+            token_label = dict_match(token)
+            if token_label:
+                return normalize_label(token_label), max(model_conf, 0.68)
+
+        # Nếu không tìm thấy gì, fallback NEUTRAL
+        return "NEUTRAL", max(model_conf, 0.5)
 
     except Exception:
-        # Nếu model lỗi, fallback dictionary hoặc NEUTRAL
-        if dic_label:
-            return normalize_label(dic_label), 0.99
+        # Nếu model lỗi, fallback NEUTRAL
         return "NEUTRAL", 0.5
 
 
