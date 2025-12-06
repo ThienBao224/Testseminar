@@ -104,7 +104,7 @@ sentiment_dict = {
     # NEUTRAL - mở rộng
     "ổn định": "NEUTRAL", "bình thường": "NEUTRAL", "cũng được": "NEUTRAL",
     "thời tiết": "NEUTRAL", "đi học": "NEUTRAL", "ngày mai": "NEUTRAL",
-    "công việc": "NEUTRAL", "học hành": "NEUTRAL","ổn": "NEUTRAL"
+    "công việc": "NEUTRAL", "học hành": "NEUTRAL","ổn": "NEUTRAL",
     
     # NEGATIVE - mở rộng
     "buồn": "NEGATIVE", "buồn vì": "NEGATIVE", "chán": "NEGATIVE",
