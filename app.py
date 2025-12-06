@@ -109,17 +109,30 @@ def classify_sentiment(text, threshold=0.5):
     clean = preprocess(text)
     if clean is None:
         return None, 0.0
+
+    # Rule phủ định
     neg_label = negation_rule(clean)
     if neg_label:
         return normalize_label(neg_label), 0.98
+
+    # Dictionary ưu tiên
     dic_label = dict_match(clean)
     if dic_label:
         return normalize_label(dic_label), 0.99
+
+    # Câu ngắn nhưng không có từ trong dictionary → NEUTRAL
+    if len(clean.split()) <= 5 and not dic_label:
+        return "NEUTRAL", 0.99
+
+    # PhoBERT fine-tuned
     result = classifier(clean)[0]
     label = normalize_label(result['label'])
     confidence = result['score']
+
+    # Confidence thấp nhưng câu dài → giữ label PhoBERT
     if len(clean.split()) <= 5 and confidence < threshold:
         label = "NEUTRAL"
+
     return label, confidence
 
 # ========================================
