@@ -217,28 +217,28 @@ def classify_sentiment(text, threshold=0.5):
     # 1. Rule phủ định
     neg_label = negation_rule(clean)
     if neg_label:
-        return normalize_label(neg_label), 0.92
+        return normalize_label(neg_label), 0.98
 
+    # 2. Dictionary toàn câu
+    dic_label = dict_match(clean)
+    
+    # 3. PhoBERT fine-tuned
     try:
-        # 2. PhoBERT fine-tuned
         result = classifier(clean)[0]
         model_label = normalize_label(result['label'])
         model_conf = result['score']
 
-        # Dictionary toàn câu
-        dic_label = dict_match(clean)
-
+        # Nếu model tự tin
         if model_conf >= threshold:
-            # Model tự tin
             if dic_label and normalize_label(dic_label) != model_label:
                 # Dictionary khác model → ưu tiên dictionary, confidence hợp lý
-                adjusted_conf = round((model_conf + 0.8) / 2, 2)  # trung bình model_conf + 0.8
+                adjusted_conf = round((model_conf + 0.8) / 2, 2)
                 return normalize_label(dic_label), adjusted_conf
             else:
-                # Dictionary giống model hoặc không có, dùng model
+                # Dictionary giống model hoặc không có → dùng model
                 return model_label, model_conf
         else:
-            # Model không tự tin, check dictionary
+            # Model không tự tin
             if dic_label:
                 adjusted_conf = min(model_conf + 0.15, 0.85)
                 return normalize_label(dic_label), adjusted_conf
@@ -251,15 +251,19 @@ def classify_sentiment(text, threshold=0.5):
                     adjusted_conf = max(model_conf, 0.65)
                     return normalize_label(token_label), adjusted_conf
 
+            # Câu ngắn + confidence thấp → NEUTRAL
+            if len(clean.split()) <= 5:
+                return "NEUTRAL", max(model_conf, 0.5)
+
             # Fallback NEUTRAL
             return "NEUTRAL", max(model_conf, 0.5)
 
     except Exception as e:
-        # Nếu model lỗi, fallback dictionary
-        dic_label = dict_match(clean)
+        # Nếu model lỗi
         if dic_label:
             return normalize_label(dic_label), 0.75
         return "NEUTRAL", 0.5
+
 
 # =======================================================
 # 11. SQLITE
