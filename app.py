@@ -140,11 +140,12 @@ def classify_sentiment(text, threshold=0.5):
     label = normalize_label(result['label'])
     confidence = result['score']
 
-    # Confidence thấp nhưng câu dài → giữ label PhoBERT
-    if len(clean.split()) <= 5 and confidence < threshold:
+    # CHỈ áp dụng NEUTRAL nếu câu ngắn + confidence thấp + không có từ trong dictionary
+    if len(clean.split()) <= 5 and confidence < threshold and dic_label is None:
         label = "NEUTRAL"
 
     return label, confidence
+
 
 # ========================================
 # 8. SQLite
