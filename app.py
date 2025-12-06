@@ -209,7 +209,7 @@ if st.sidebar.button("Chạy 10 test case"):
         results.append({
             "Câu": case["text"],
             "Dự đoán": pred.upper(),
-            "Mong đợi": case["true"].upper(),
+            "Mong đợi": case["expected"].upper(),
             "Kết quả": "✔️ Đúng" if ok else "❌ Sai"
         })
     acc = (correct / len(test_cases)) * 100
