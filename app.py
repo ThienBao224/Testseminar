@@ -221,48 +221,24 @@ def classify_sentiment(text, threshold=0.5):
 
     # 2. Dictionary toàn câu
     dic_label = dict_match(clean)
-    
-    # 3. PhoBERT fine-tuned
+
+    # 3. PhoBERT fine-tuned (chỉ tham khảo)
     try:
         result = classifier(clean)[0]
         model_label = normalize_label(result['label'])
         model_conf = result['score']
+    except:
+        model_label = "NEUTRAL"
+        model_conf = 0.5
 
-        # Nếu model tự tin
-        if model_conf >= threshold:
-            if dic_label and normalize_label(dic_label) != model_label:
-                # Dictionary khác model → ưu tiên dictionary, confidence hợp lý
-                adjusted_conf = round((model_conf + 0.8) / 2, 2)
-                return normalize_label(dic_label), adjusted_conf
-            else:
-                # Dictionary giống model hoặc không có → dùng model
-                return model_label, model_conf
-        else:
-            # Model không tự tin
-            if dic_label:
-                adjusted_conf = min(model_conf + 0.15, 0.85)
-                return normalize_label(dic_label), adjusted_conf
+    # 4. Nếu dictionary tồn tại → ưu tiên dictionary
+    if dic_label:
+        adjusted_conf = round(max(model_conf, 0.7), 2)  # confidence hợp lý
+        return normalize_label(dic_label), adjusted_conf
 
-            # Token-level dictionary
-            tokens = clean.split()
-            for token in tokens:
-                token_label = dict_match(token)
-                if token_label:
-                    adjusted_conf = max(model_conf, 0.65)
-                    return normalize_label(token_label), adjusted_conf
+    # 5. Nếu không có dictionary → dùng model
+    return model_label, model_conf
 
-            # Câu ngắn + confidence thấp → NEUTRAL
-            if len(clean.split()) <= 5:
-                return "NEUTRAL", max(model_conf, 0.5)
-
-            # Fallback NEUTRAL
-            return "NEUTRAL", max(model_conf, 0.5)
-
-    except Exception as e:
-        # Nếu model lỗi
-        if dic_label:
-            return normalize_label(dic_label), 0.75
-        return "NEUTRAL", 0.5
 
 
 # =======================================================
