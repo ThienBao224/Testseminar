@@ -65,21 +65,11 @@ def normalize_abbrev(text):
 # =======================================================
 def preprocess(text):
     text = text.lower().strip()
-    
-    # 1. Restore dấu trước khi tokenize
     text = restore_accents(text)
-    
-    # 2. Tokenize bằng Underthesea
     words = word_tokenize(text, format="text").split()
-    
-    # 3. Giới hạn từ
     if len(words) < 2 or len(words) > 20:
         return None
-    
-    # 4. Normalize viết tắt thêm lần nữa
     words = [abbrev_map.get(w, w) for w in words]
-    
-    # 5. Trả về câu chuẩn
     return " ".join(words)
 
 # =======================================================
@@ -156,19 +146,13 @@ def dict_match(text):
 # 7. KHÔI PHỤC DẤU
 # =======================================================
 def restore_accents(text):
-    # 1. Normalize viết tắt
     text = normalize_abbrev(text.lower())
-    
-    # 2. Match accent_dict theo cụm từ giảm dần
     sorted_keys = sorted(accent_dict.keys(), key=lambda x: -len(x.split()))
     text_no = remove_accents(text)
-    
     for key in sorted_keys:
         key_no = remove_accents(key)
-        # Dùng regex để match từ/cụm, không quan tâm dấu trong text
         pattern = r'\b' + re.escape(key_no) + r'\b'
         text = re.sub(pattern, accent_dict[key], text, flags=re.IGNORECASE)
-    
     return text
 
 # =======================================================
@@ -222,27 +206,38 @@ def classify_sentiment(text, threshold=0.5):
     # 1. Rule phủ định
     neg_label = negation_rule(clean)
     if neg_label:
-        return normalize_label(neg_label), 0.98
+        return normalize_label(neg_label), 0.92
 
-    # 2. Dictionary toàn câu
-    dic_label = dict_match(clean)
-
-    # 3. PhoBERT fine-tuned (chỉ tham khảo)
+    # 2. PhoBERT
     try:
         result = classifier(clean)[0]
         model_label = normalize_label(result['label'])
         model_conf = result['score']
+
+        # 2a. Check dictionary toàn câu
+        dic_label = dict_match(clean)
+        if dic_label:
+            return normalize_label(dic_label), min(model_conf + 0.15, 0.85)
+
+        # 2b. Nếu model tự tin, dùng model
+        if model_conf >= threshold:
+            return model_label, model_conf
+
+        # 2c. Kiểm tra từng token
+        tokens = clean.split()
+        for token in tokens:
+            token_label = dict_match(token)
+            if token_label:
+                return normalize_label(token_label), max(model_conf, 0.68)
+
+        # 2d. Fallback NEUTRAL
+        return "NEUTRAL", max(model_conf, 0.5)
+
     except:
-        model_label = "NEUTRAL"
-        model_conf = 0.5
-
-    # 4. Nếu dictionary tồn tại → ưu tiên dictionary
-    if dic_label:
-        adjusted_conf = round(max(model_conf, 0.7), 2)  # confidence hợp lý
-        return normalize_label(dic_label), adjusted_conf
-
-    # 5. Nếu không có dictionary → dùng model
-    return model_label, model_conf
+        dic_label = dict_match(clean)
+        if dic_label:
+            return normalize_label(dic_label), 0.75
+        return "NEUTRAL", 0.5
 
 
 
