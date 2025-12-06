@@ -195,7 +195,7 @@ def get_emoji(label):
 # =======================================================
 # 10. PHÂN LOẠI SENTIMENT
 # =======================================================
-def classify_sentiment(text, threshold=0.55):
+def classify_sentiment(text, threshold=0.5):
     clean = preprocess_underthesea(text)
     if clean is None:
         return None, 0.0
