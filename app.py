@@ -203,7 +203,7 @@ if st.sidebar.button("Chạy 10 test case"):
     for case in test_cases:
         pred, conf = classify_sentiment(case["text"])
         pred = pred if pred else "NEUTRAL"
-        ok = pred.upper() == case["true"].upper()
+        ok = pred.upper() == case["expected"].upper()
         if ok:
             correct += 1
         results.append({
