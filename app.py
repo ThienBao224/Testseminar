@@ -219,42 +219,35 @@ def classify_sentiment(text, threshold=0.5):
     if neg_label:
         return normalize_label(neg_label), 0.92
 
-    # 2. Dictionary - ƯU TIÊN DÙNG MODEL TRƯỚC
-    # Chỉ dùng dictionary khi model không tự tin
-    
-    # 3. PhoBERT fine-tuned (ƯU TIÊN!)
     try:
+        # 2. Model PhoBERT
         result = classifier(clean)[0]
         label = normalize_label(result['label'])
         confidence = result['score']
-        
-        # Nếu model tự tin (>= threshold), tin model
-        if confidence >= threshold:
-            return label, confidence
-        
-        # Nếu model không tự tin, check dictionary
+
+        # 3. Dictionary check toàn câu (override model nếu match)
         dic_label = dict_match(clean)
         if dic_label:
-            # Dictionary tìm thấy, nhưng confidence thấp hơn model thật
-            return normalize_label(dic_label), min(confidence + 0.15, 0.85)
-        
-        # Nếu confidence thấp và không có trong dictionary, check từng từ
+            label = normalize_label(dic_label)
+            confidence = min(max(confidence, 0.7) + 0.15, 0.85)
+            return label, confidence
+
+        # 4. Token-level check nếu toàn câu không match
         tokens = clean.split()
         for token in tokens:
             token_label = dict_match(token)
             if token_label:
                 return normalize_label(token_label), 0.68
-        
-        # Không tìm thấy gì, gán NEUTRAL với confidence thấp
-        return "NEUTRAL", confidence
-        
-    except Exception as e:
-        # Nếu model lỗi, dùng dictionary
+
+        # 5. Nếu model tự tin, giữ model
+        return label, confidence if confidence >= threshold else max(confidence, 0.5)
+
+    except Exception:
+        # Model lỗi → fallback dictionary hoặc NEUTRAL
         dic_label = dict_match(clean)
         if dic_label:
             return normalize_label(dic_label), 0.75
         return "NEUTRAL", 0.5
-
 
 # =======================================================
 # 11. SQLITE
