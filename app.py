@@ -63,7 +63,7 @@ def normalize_abbrev(text):
 # =======================================================
 # 3. TIỀN XỬ LÝ (DÙNG UNDERTHESEA)
 # =======================================================
-def preprocess_underthesea(text):
+def preprocess(text):
     text = text.lower().strip()
     if len(text) < 2 or len(text) > 120:
         return None
