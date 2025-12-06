@@ -219,39 +219,43 @@ def classify_sentiment(text, threshold=0.5):
     if neg_label:
         return normalize_label(neg_label), 0.92
 
-    # 2. PhoBERT fine-tuned
     try:
+        # 2. PhoBERT fine-tuned
         result = classifier(clean)[0]
         model_label = normalize_label(result['label'])
         model_conf = result['score']
 
-        # Nếu model tự tin trước
+        # Dictionary toàn câu
+        dic_label = dict_match(clean)
+
         if model_conf >= threshold:
-            dic_label = dict_match(clean)
-            if dic_label:
-                # Dictionary match, ưu tiên dictionary nhưng confidence vẫn dựa vào model
-                return normalize_label(dic_label), min(model_conf + 0.15, 0.85)
+            # Model tự tin
+            if dic_label and normalize_label(dic_label) != model_label:
+                # Dictionary khác nhãn, điều chỉnh confidence
+                adjusted_conf = min(model_conf + 0.1, 0.99)
+                return normalize_label(dic_label), adjusted_conf
             else:
-                # Không có dictionary, dùng model
+                # Dictionary không khác hoặc không có
                 return model_label, model_conf
         else:
-            # Model không tự tin, check dictionary toàn câu
-            dic_label = dict_match(clean)
+            # Model không tự tin, check dictionary
             if dic_label:
-                return normalize_label(dic_label), min(model_conf + 0.15, 0.85)
+                adjusted_conf = min(model_conf + 0.15, 0.85)
+                return normalize_label(dic_label), adjusted_conf
 
-            # Check từng token
+            # Token-level
             tokens = clean.split()
             for token in tokens:
                 token_label = dict_match(token)
                 if token_label:
-                    return normalize_label(token_label), max(model_conf, 0.68)
+                    adjusted_conf = max(model_conf, 0.65)
+                    return normalize_label(token_label), adjusted_conf
 
             # Fallback NEUTRAL
             return "NEUTRAL", max(model_conf, 0.5)
 
     except Exception as e:
-        # Nếu model lỗi, fallback dictionary
+        # Nếu model lỗi
         dic_label = dict_match(clean)
         if dic_label:
             return normalize_label(dic_label), 0.75
