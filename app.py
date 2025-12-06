@@ -196,7 +196,7 @@ def get_emoji(label):
 # =======================================================
 def classify_sentiment(text, threshold=0.5):
     # --- Tiền xử lý ---
-    clean = preprocess_underthesea(text)
+    clean = preprocess(text)
     if clean is None:
         return None, 0.0
 
