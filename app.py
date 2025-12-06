@@ -65,11 +65,23 @@ def normalize_abbrev(text):
 # =======================================================
 def preprocess(text):
     text = text.lower().strip()
-    if len(text) < 2 or len(text) > 120:
+    if len(text) < 5 or len(text) > 50:  # Giới hạn ký tự
         return None
-    tokens = word_tokenize(text, format="text")  # Chuẩn token tiếng Việt
-    tokens = normalize_abbrev(tokens)
-    return tokens
+
+    # Tokenize
+    words = word_tokenize(text, format="text").split()
+
+    if len(words) < 2 or len(words) > 20:  # Giới hạn từ
+        return None
+
+    # Normalize viết tắt
+    words = [abbrev_map.get(w, w) for w in words]
+
+    # Restore dấu (accent dictionary)
+    words = [accent_dict.get(w, w) for w in words]
+
+    # Trả về câu chuẩn
+    return " ".join(words)
 
 # =======================================================
 # 4. LOAD PHOBERT (THỬ NHIỀU MODEL)
@@ -128,8 +140,11 @@ accent_dict = {
 def dict_match(text):
     if not text:
         return None
+
     t = text.lower().replace("_", " ").strip()
     t_no = remove_accents(t)
+
+    # Sắp xếp theo độ dài key giảm dần để match cụm từ trước
     sorted_keys = sorted(sentiment_dict.keys(), key=lambda x: -len(x.split()))
     for key in sorted_keys:
         key_norm = key.lower().replace("_", " ")
