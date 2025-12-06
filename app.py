@@ -202,8 +202,8 @@ def get_emoji(label):
 # =======================================================
 # 10. PHÂN LOẠI SENTIMENT
 # =======================================================
-def classify_sentiment(text, threshold=0.5):
-    # 1. Tiền xử lý: lowercase + bỏ khoảng trắng + restore accents
+def classify_sentiment(text, threshold=0.7):
+    # 1. Tiền xử lý: lowercase + restore accents + expand viết tắt
     clean = preprocess(text)
     if clean is None:
         return None, 0.0
@@ -211,35 +211,29 @@ def classify_sentiment(text, threshold=0.5):
     # 2. Rule phủ định (ưu tiên cao nhất)
     neg_label = negation_rule(clean)
     if neg_label:
-        return normalize_label(neg_label), 0.92
+        return normalize_label(neg_label), 0.98
 
-    # 3. Dictionary toàn câu (ưu tiên mạnh)
+    # 3. Dictionary mạnh (ưu tiên)
     dic_label = dict_match(clean)
     if dic_label:
-        return normalize_label(dic_label), 0.85
+        return normalize_label(dic_label), 0.99
 
-    # 4. Model PhoBERT (chỉ dùng khi không có dictionary)
+    # 4. PhoBERT fine-tuned
     try:
         result = classifier(clean)[0]
-        model_label = normalize_label(result['label'])
-        model_conf = result['score']
+        label = normalize_label(result['label'])
+        confidence = result['score']
 
-        # Nếu model tự tin, dùng model
-        if model_conf >= threshold:
-            return model_label, model_conf
+        # 5. Câu ngắn + confidence thấp → NEUTRAL
+        if len(clean.split()) <= 5 and confidence < threshold:
+            label = "NEUTRAL"
 
-        # Kiểm tra từng token
-        tokens = clean.split()
-        for token in tokens:
-            token_label = dict_match(token)
-            if token_label:
-                return normalize_label(token_label), max(model_conf, 0.68)
-
-        # Nếu không tìm thấy gì, fallback NEUTRAL
-        return "NEUTRAL", max(model_conf, 0.5)
+        return label, confidence
 
     except Exception:
-        # Nếu model lỗi, fallback NEUTRAL
+        # Nếu model lỗi, fallback dictionary hoặc NEUTRAL
+        if dic_label:
+            return normalize_label(dic_label), 0.99
         return "NEUTRAL", 0.5
 
 
